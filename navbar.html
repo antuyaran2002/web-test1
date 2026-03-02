@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>URL Bar Cascade Lab</title>
+    <style>
+        /* =========================================
+           1. 全局变量与基础设定
+           ========================================= */
+        :root {
+            --chrome-bg: #dee1e6;
+            --toolbar-bg: #ffffff;
+            --url-bar-bg: #f1f3f4;
+            --win-close-hover: #e81123;
+            --win-btn-hover: rgba(0, 0, 0, 0.1);
+        }
+
+        @font-face {
+            font-family: 'Google Sans Variable';
+            src: url('GoogleSans-Variable.ttf') format('truetype');
+            font-weight: 100 900; 
+            font-style: normal;
+        }
+
+        body {
+            margin: 0; background-color: #1a1a1a; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            overflow: hidden; /* 防止瀑布流超出屏幕产生滚动条 */
+        }
+
+        /* =========================================
+           2. 完美复刻的窗口外壳与标签栏
+           ========================================= */
+        .browser-container {
+            width: 90%; height: 90%; background: var(--toolbar-bg);
+            display: flex; flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+            border-radius: 12px; overflow: hidden; 
+            border: 1px solid rgba(0,0,0,0.1); position: relative;
+        }
+
+        .title-bar {
+            height: 33px; background: var(--chrome-bg);
+            display: flex; align-items: flex-end; padding: 0; 
+        }
+
+        .tab-search-btn {
+            width: 24px; height: 24px; border-radius: 4px;
+            display: flex; justify-content: center; align-items: center;
+            align-self: center; margin-left: 8px; margin-right: 4px;
+            cursor: pointer; color: #444746; transition: background 0.15s;
+        }
+        .tab-search-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
+        .tab-search-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+        .tabs { display: flex; align-items: flex-end; height: 100%; padding-left: 4px; }
+        .tab {
+            position: relative; width: 200px; height: 27px; 
+            background: var(--toolbar-bg); font-size: 12px;
+            display: flex; align-items: center; padding: 0 16px;
+            border-radius: 8px 8px 0 0; color: #333; z-index: 10;
+        }
+        .tab::before, .tab::after {
+            content: ""; position: absolute; bottom: 0; width: 10px; height: 10px;
+        }
+        .tab::before { left: -10px; background: radial-gradient(circle at 0 0, transparent 10px, var(--toolbar-bg) 10.5px); }
+        .tab::after { right: -10px; background: radial-gradient(circle at 100% 0, transparent 10px, var(--toolbar-bg) 10.5px); }
+
+        .window-controls { display: flex; height: 100%; margin-left: auto; }
+        .win-btn {
+            width: 46px; height: 100%; display: flex;
+            justify-content: center; align-items: center; 
+            cursor: pointer; transition: 0.1s; color: #1a1a1a; text-decoration: none;
+        }
+        .win-btn svg { width: 10px; height: 10px; }
+        .win-btn:hover { background: var(--win-btn-hover); }
+        .win-btn.close:hover { background: var(--win-close-hover); color: white; }
+
+        /* =========================================
+           3. 工具栏与 URL 地址栏 (瀑布流宿主)
+           ========================================= */
+        .toolbar {
+            position: relative; z-index: 20; height: 44px;
+            background-color: var(--toolbar-bg); display: flex;
+            align-items: center; padding: 0 8px; gap: 8px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .nav-icons { display: flex; gap: 4px; padding-right: 4px; }
+        .icon-btn {
+            width: 28px; height: 28px; border-radius: 50%; display: flex;
+            justify-content: center; align-items: center; 
+            cursor: pointer; transition: background 0.15s; text-decoration: none;
+        }
+        .icon-btn:hover { background-color: rgba(0, 0, 0, 0.1); }
+        .icon-btn svg { width: 18px; height: 18px; fill: #5f6368; }
+        .icon-btn.disabled { opacity: 0.35; cursor: default; }
+
+        /* --- 瀑布流容器核心代码 --- */
+        .url-bar-wrapper {
+            position: relative; /* 为克隆体提供绝对定位的基准 */
+            flex: 1; height: 28px; background-color: var(--url-bar-bg);
+            border-radius: 14px; display: flex; align-items: center;
+            padding: 0 12px; z-index: 50; 
+        }
+        .url-bar-content { display: flex; align-items: center; gap: 10px; }
+        .lock-icon { width: 14px; height: 14px; fill: #5f6368; }
+        .placeholder-text { font-size: 13px; color: #5f6368; user-select: none; }
+
+        #clone-container {
+            position: absolute;
+            top: 28px; /* 紧贴原生栏底端 */
+            left: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0; /* 制造无缝胶囊边缘感 */
+            z-index: -1;
+        }
+
+        .cloned-bar {
+            width: 100%; height: 28px; background-color: var(--url-bar-bg);
+            border-radius: 14px; display: flex; align-items: center;
+            padding: 0 12px; box-sizing: border-box;
+            animation: slideDown 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            opacity: 0; transform: translateY(-15px);
+        }
+
+        @keyframes slideDown {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* =========================================
+           4. 网页正文区 (同步了你的灰色版 UI)
+           ========================================= */
+        .web-content {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; padding-top: 80px; background: #ffffff;
+        }
+
+        .google-logo { 
+            font-family: 'Google Sans Variable', sans-serif;
+            font-weight: 560; font-size: 80px; margin-bottom: 30px; letter-spacing: -1px; 
+        }
+        .google-logo span { color: #ababab; } /* 同步灰色 */
+
+        .native-search-field {
+            height: 44px; width: 584px; background: #ffffff; display: flex; align-items: center;
+            border-radius: 24px; box-sizing: border-box; padding: 0 12px 0 14px;
+            box-shadow: 0 0 0 1px #c5c7cb, 0 1px 3px rgba(0, 0, 0, 0.05); /* 同步边框 */
+        }
+
+        .search-icon-slot { display: flex; align-items: center; margin-right: 12px; }
+        .native-search-svg { width: 20px; height: 20px; fill: #202124; } /* 同步深灰 */
+        
+        .native-placeholder { flex: 1; font-size: 16px; color: #202124; user-select: none; }
+
+        .mic-icon-slot { display: flex; align-items: center; }
+        .native-mic-svg { width: 24px; height: 24px; fill: #bcbcbc; } /* 同步浅灰 */
+
+        .btn-row { margin-top: 30px; display: flex; gap: 12px; }
+        .fake-google-btn {
+            height: 36px; padding: 0 16px; background: #f8f9fa;
+            border-radius: 4px; font-size: 14px; line-height: 36px;
+            cursor: pointer; color: #202124; border: 1px solid #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="browser-container">
+        
+        <div class="title-bar">
+            <div class="tab-search-btn">
+                <svg viewBox="0 0 16 16"><path d="M12.14 5.5L8 9.64 3.86 5.5 2.5 6.86 8 12.36l5.5-5.5z" fill="currentColor"/></svg>
+            </div>
+            <div class="tabs"><div class="tab">Nav Bar</div></div>
+            
+            <div class="window-controls">
+                <div class="win-btn"><svg width="10" height="1" viewBox="0 0 10 1"><path d="M0 0h10v1H0z" fill="currentColor"/></svg></div>
+                <div class="win-btn"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0h10v10H0V0zm1 1v8h8V1H1z" fill="currentColor"/></svg></div>
+                <a href="index.html" class="win-btn close"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l1 1 4 4-4 4 1 1 4-4 4 4 1-1-4-4 4-4-1-1-4 4-4-4z" fill="currentColor"/></svg></a>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="nav-icons">
+                <a href="index.html" class="icon-btn"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></a>
+                <div class="icon-btn disabled"><svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg></div>
+                <div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></div>
+            </div>
+        
+            <div class="url-bar-wrapper">
+                <div class="url-bar-content">
+                    <svg class="lock-icon" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+                    <span class="placeholder-text">Search Google or type a URL</span>
+                </div>
+                <div id="clone-container"></div>
+            </div>
+        </div>
+
+        <div class="web-content">
+            <div class="google-logo"><span>Google</span></div>
+        
+            <div class="native-search-field">
+                <div class="search-icon-slot">
+                    <svg viewBox="0 0 24 24" class="native-search-svg"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
+                </div>
+                <span class="native-placeholder"></span>
+                <div class="mic-icon-slot">
+                    <svg viewBox="0 0 24 24" class="native-mic-svg"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" /></svg>
+                </div>
+            </div>
+        
+            <div class="btn-row">
+                <div class="fake-google-btn">Search</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const container = document.getElementById('clone-container');
+        let cloneCount = 0;
+        const maxClones = 25; 
+
+        // 统一克隆体的内容 (锁头 + Search Google or type a URL)
+        const cloneHTML = `
+            <div class="url-bar-content">
+                <svg class="lock-icon" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+                <span class="placeholder-text">Search Google or type a URL</span>
+            </div>
+        `;
+
+        function spawnClone() {
+            // 当达到最大数量时触发“重启”逻辑
+            if (cloneCount >= maxClones) {
+                clearInterval(spawner); // 停止继续生成
+                
+                // 核心修改：增加定时器，1.5秒后自动跳回主页
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 300); 
+                
+                return;
+            }
+            
+            const newBar = document.createElement('div');
+            newBar.className = 'cloned-bar';
+            newBar.innerHTML = cloneHTML;
+            
+            container.appendChild(newBar);
+            cloneCount++;
+        }
+
+        // 设定了 800ms 的延迟，给用户一点喘息的时间，然后以 0.5s/条 的速度开始下落
+        let spawner;
+        setTimeout(() => {
+            spawner = setInterval(spawnClone, 300);
+        }, 300);
+    </script>
+</body>
+</html>
