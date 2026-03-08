@@ -205,6 +205,79 @@
             cursor: pointer; color: #202124; border: 1px solid #f8f9fa;
         }
         .fake-google-btn:hover { border: 1px solid #dadce0; box-shadow: 0 1px 1px rgba(0,0,0,.1); }
+        /* =========================================
+           5. 麦克风 Intro 弹框 (原生 Google 气泡风格)
+           ========================================= */
+           .mic-icon-slot { 
+            display: flex; 
+            align-items: center; 
+            position: relative; /* 核心：让气泡以麦克风为坐标原点 */
+            cursor: pointer;
+            border-radius: 50%; /* 让 hover 范围变圆 */
+            padding: 4px; /* 增加一点点击区域 */
+        }
+        
+        .mic-icon-slot:hover .native-mic-svg {
+            fill: #202124; /* 悬停时图标变深，增强可点击暗示 */
+        }
+        .native-mic-svg { transition: fill 0.2s; }
+
+        /* 气泡本体样式 */
+        .intro-bubble {
+            position: absolute;
+            top: 45px; /* 悬浮在麦克风正下方 */
+            right: -5px; /* 右边缘对齐 */
+            width: 280px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Google 原生阴影 */
+            padding: 18px;
+            cursor: default; /* 鼠标放上去变回普通箭头，防止继承上层链接的手型 */
+            border: 1px solid #dadce0;
+            
+            /* 隐藏状态（带下滑渐入动画） */
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 100;
+        }
+
+        /* 气泡激活状态 */
+        .intro-bubble.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        /* 气泡上方的小三角箭头 */
+        .intro-bubble::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 14px; /* 精准指向麦克风中心 */
+            width: 10px;
+            height: 10px;
+            background: #ffffff;
+            transform: rotate(45deg);
+            border-left: 1px solid #dadce0;
+            border-top: 1px solid #dadce0;
+        }
+
+        /* 气泡内的排版 */
+        .intro-bubble h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a73e8; /* 经典的 Google Blue */
+            font-family: 'Google Sans Variable', sans-serif;
+        }
+        .intro-bubble p {
+            margin: 0;
+            color: #3c4043;
+            font-size: 13px;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
@@ -260,9 +333,14 @@
                         <svg viewBox="0 0 24 24" class="native-search-svg"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
                     </div>
                     <span class="native-placeholder"></span>
-                    <div class="mic-icon-slot">
+                    <div class="mic-icon-slot" id="mic-btn">
                         <svg viewBox="0 0 24 24" class="native-mic-svg"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" /></svg>
-                    </div>
+                        
+                        <div id="intro-bubble" class="intro-bubble">
+                            <h3>Welcome to the Web</h3>
+                            <p>This is a conceptual playground. Feel free to use the page!<br><br>—just know that the buttons may behave in unexpected ways, like right now!</p>
+                        </div>
+                        </div>
                 </div>
             </a>
         
@@ -283,6 +361,31 @@
         // 避开最边缘，确保鼠标图案能完整显示
         ghost.style.left = (Math.floor(Math.random() * 80) + 10) + 'vw';
         ghost.style.top = (Math.floor(Math.random() * 80) + 10) + 'vh';
+        // 麦克风 Intro 气泡交互逻辑
+        const micBtn = document.getElementById('mic-btn');
+        const introBubble = document.getElementById('intro-bubble');
+
+        micBtn.addEventListener('click', (e) => {
+            // 魔法1：阻止 a 标签的页面跳转行为
+            e.preventDefault(); 
+            // 魔法2：阻止事件冒泡到外层的链接容器
+            e.stopPropagation(); 
+            // 切换气泡的显示/隐藏状态
+            introBubble.classList.toggle('active');
+        });
+
+        // 魔法3：让气泡内的点击也不会触发跳转，方便用户复制里面的文本
+        introBubble.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        // 魔法4：点击网页其他任意空白地方，气泡会自动收起
+        document.addEventListener('click', (e) => {
+            if (!introBubble.contains(e.target) && !micBtn.contains(e.target)) {
+                introBubble.classList.remove('active');
+            }
+        });
     </script>
 
 </body>
